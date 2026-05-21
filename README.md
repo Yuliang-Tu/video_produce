@@ -1,10 +1,4 @@
 <p align="center">
-  <a href="https://www.waoowaoo.com/">
-    <img src="images/cta-banner.png" alt="🚀 探索 AI 影视的下一代创作流 | 立即加入 waoowaoo 在线网页版内测候补" width="800">
-  </a>
-</p>
-
-<p align="center">
   <img src="public/banner.png" alt="waoowaoo" width="600">
 </p>
 
