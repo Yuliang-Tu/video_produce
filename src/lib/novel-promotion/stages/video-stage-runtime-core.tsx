@@ -125,7 +125,7 @@ export function useVideoStageRuntime({
     onUpdateVideoPrompt,
   })
 
-  const { linkedPanels, handleToggleLink } = useVideoPanelLinking({
+  const { linkedPanels, handleToggleLink, handleSetLink } = useVideoPanelLinking({
     allPanels,
     updatePanelLinkMutation,
   })
@@ -187,6 +187,8 @@ export function useVideoStageRuntime({
   const [isSubmittingVideoBatch, setIsSubmittingVideoBatch] = useState(false)
   const [submittingVideoPanelKeys, setSubmittingVideoPanelKeys] = useState<Set<string>>(new Set())
   const [submittingVideoBaselines, setSubmittingVideoBaselines] = useState<Map<string, VideoSubmissionBaseline>>(new Map())
+  const [selectedPanelKeys, setSelectedPanelKeys] = useState<Set<string>>(new Set())
+  const [isBatchSelectionOperating, setIsBatchSelectionOperating] = useState(false)
   const [batchSelectedModel, setBatchSelectedModel] = useState('')
   const [batchGenerationOptions, setBatchGenerationOptions] = useState<VideoGenerationOptions>({})
 
@@ -474,8 +476,139 @@ export function useVideoStageRuntime({
 
   const runningCount = projectedPanels.filter((panel) => panel.videoTaskRunning || panel.lipSyncTaskRunning).length
   const failedCount = allPanels.filter((panel) => !!panel.videoErrorMessage || !!panel.lipSyncErrorMessage).length
-  const isAnyTaskRunning = runningCount > 0 || isSubmittingVideoBatch
+  const isAnyTaskRunning = runningCount > 0 || isSubmittingVideoBatch || isBatchSelectionOperating
   const canSubmitBatchGenerate = !!batchSelectedModel && batchMissingCapabilityFields.length === 0
+  const selectablePanelKeys = useMemo(
+    () => new Set(projectedPanels.map((panel) => `${panel.storyboardId}-${panel.panelIndex}`)),
+    [projectedPanels],
+  )
+  const selectedPanels = useMemo(
+    () => projectedPanels.filter((panel) => selectedPanelKeys.has(`${panel.storyboardId}-${panel.panelIndex}`)),
+    [projectedPanels, selectedPanelKeys],
+  )
+
+  useEffect(() => {
+    setSelectedPanelKeys((previous) => {
+      if (previous.size === 0) return previous
+      const next = new Set<string>()
+      previous.forEach((key) => {
+        if (selectablePanelKeys.has(key)) next.add(key)
+      })
+      return next.size === previous.size ? previous : next
+    })
+  }, [selectablePanelKeys])
+
+  const handleTogglePanelSelected = useCallback((panelKey: string) => {
+    setSelectedPanelKeys((previous) => {
+      const next = new Set(previous)
+      if (next.has(panelKey)) next.delete(panelKey)
+      else next.add(panelKey)
+      return next
+    })
+  }, [])
+
+  const handleSelectAllPanels = useCallback(() => {
+    setSelectedPanelKeys(new Set(projectedPanels.map((panel) => `${panel.storyboardId}-${panel.panelIndex}`)))
+  }, [projectedPanels])
+
+  const handleSelectPendingPanels = useCallback(() => {
+    setSelectedPanelKeys(new Set(
+      projectedPanels
+        .filter((panel) => panel.imageUrl && !panel.videoUrl && !panel.videoTaskRunning)
+        .map((panel) => `${panel.storyboardId}-${panel.panelIndex}`),
+    ))
+  }, [projectedPanels])
+
+  const handleClearPanelSelection = useCallback(() => {
+    setSelectedPanelKeys(new Set())
+  }, [])
+
+  const handleEnableFirstLastFrameForSelected = useCallback(async () => {
+    if (isAnyTaskRunning || isBatchSelectionOperating || !flModel || flMissingCapabilityFields.length > 0) return
+    const selected = new Set(selectedPanelKeys)
+    if (selected.size === 0) return
+
+    setIsBatchSelectionOperating(true)
+    try {
+      for (let index = 0; index < projectedPanels.length - 1; index += 1) {
+        const panel = projectedPanels[index]
+        const nextPanel = projectedPanels[index + 1]
+        const panelKey = `${panel.storyboardId}-${panel.panelIndex}`
+        const nextPanelKey = `${nextPanel.storyboardId}-${nextPanel.panelIndex}`
+        if (!selected.has(panelKey) || !selected.has(nextPanelKey)) continue
+        if (!panel.imageUrl || !nextPanel.imageUrl) continue
+        await handleSetLink(panelKey, panel.storyboardId, panel.panelIndex, true)
+      }
+    } finally {
+      setIsBatchSelectionOperating(false)
+    }
+  }, [
+    flMissingCapabilityFields.length,
+    flModel,
+    handleSetLink,
+    isAnyTaskRunning,
+    isBatchSelectionOperating,
+    projectedPanels,
+    selectedPanelKeys,
+  ])
+
+  const handleGenerateSelectedVideos = useCallback(async () => {
+    if (isAnyTaskRunning || isBatchSelectionOperating || selectedPanels.length === 0) return
+    const normalModel = (batchSelectedModel || defaultVideoModel).trim()
+
+    setIsBatchSelectionOperating(true)
+    try {
+      for (let index = 0; index < projectedPanels.length; index += 1) {
+        const panel = projectedPanels[index]
+        const panelKey = `${panel.storyboardId}-${panel.panelIndex}`
+        if (!selectedPanelKeys.has(panelKey) || panel.videoTaskRunning || !panel.imageUrl) continue
+
+        const nextPanel = projectedPanels[index + 1]
+        const previousPanel = projectedPanels[index - 1]
+        const previousKey = previousPanel ? `${previousPanel.storyboardId}-${previousPanel.panelIndex}` : ''
+        const isLastFrameOnly = !!previousPanel && linkedPanels.get(previousKey) === true && linkedPanels.get(panelKey) !== true
+        if (isLastFrameOnly) continue
+
+        if (linkedPanels.get(panelKey) === true && nextPanel?.imageUrl) {
+          await handleGenerateFirstLastFrame(
+            panel.storyboardId,
+            panel.panelIndex,
+            nextPanel.storyboardId,
+            nextPanel.panelIndex,
+            panelKey,
+            flGenerationOptions,
+            panel.panelId,
+          )
+          continue
+        }
+
+        if (!normalModel) continue
+        await handleGenerateVideoWithImmediateLock(
+          panel.storyboardId,
+          panel.panelIndex,
+          normalModel,
+          undefined,
+          batchGenerationOptions,
+          panel.panelId,
+        )
+      }
+    } finally {
+      setIsBatchSelectionOperating(false)
+    }
+  }, [
+    batchGenerationOptions,
+    batchSelectedModel,
+    defaultVideoModel,
+    flGenerationOptions,
+    handleGenerateFirstLastFrame,
+    handleGenerateVideoWithImmediateLock,
+    isAnyTaskRunning,
+    isBatchSelectionOperating,
+    linkedPanels,
+    projectedPanels,
+    selectedPanelKeys,
+    selectedPanels.length,
+  ])
 
   const handleOpenBatchGenerateModal = useCallback(() => {
     if (isAnyTaskRunning) return
@@ -514,9 +647,18 @@ export function useVideoStageRuntime({
         runningCount={runningCount}
         videosWithUrl={videosWithUrl}
         failedCount={failedCount}
+        selectedCount={selectedPanelKeys.size}
+        selectableCount={projectedPanels.length}
+        canUseFirstLastFrame={!!flModel && flMissingCapabilityFields.length === 0}
         isAnyTaskRunning={isAnyTaskRunning}
+        isBatchOperating={isBatchSelectionOperating}
         isDownloading={isDownloading}
         onGenerateAll={handleOpenBatchGenerateModal}
+        onGenerateSelected={handleGenerateSelectedVideos}
+        onSelectAll={handleSelectAllPanels}
+        onSelectPending={handleSelectPendingPanels}
+        onClearSelection={handleClearPanelSelection}
+        onEnableFirstLastFrame={handleEnableFirstLastFrameForSelected}
         onDownloadAll={handleDownloadAllVideos}
         onBack={onBack}
         onEnterEditor={onEnterEditor}
@@ -549,6 +691,7 @@ export function useVideoStageRuntime({
         panelVoiceLines={panelVoiceLines}
         panelVideoPreference={panelVideoPreference}
         savingPrompts={savingPrompts}
+        selectedPanelKeys={selectedPanelKeys}
         flModel={flModel}
         flModelOptions={flModelOptions}
         flGenerationOptions={flGenerationOptions}
@@ -558,6 +701,7 @@ export function useVideoStageRuntime({
         onGenerateVideo={handleGenerateVideoWithImmediateLock}
         onUpdatePanelVideoModel={onUpdatePanelVideoModel}
         onLipSync={handleLipSync}
+        onTogglePanelSelected={handleTogglePanelSelected}
         onToggleLink={handleToggleLink}
         onFlModelChange={setFlModel}
         onFlCapabilityChange={setFlCapabilityValue}

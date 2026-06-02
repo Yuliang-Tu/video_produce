@@ -139,6 +139,22 @@ describe('worker shared direct run events', () => {
     }))
   })
 
+  it('preserves task locale in persisted progress payloads', async () => {
+    await reportTaskProgress(buildJob('image_panel'), 30, {
+      stage: 'polling_external',
+    })
+
+    expect(tryUpdateTaskProgressMock).toHaveBeenCalledWith(
+      'task-1',
+      30,
+      expect.objectContaining({
+        meta: expect.objectContaining({
+          locale: 'zh',
+        }),
+      }),
+    )
+  })
+
   it('publishes run events directly for core analysis stream chunks', async () => {
     await reportTaskStreamChunk(buildJob('script_to_storyboard_run'), {
       kind: 'text',

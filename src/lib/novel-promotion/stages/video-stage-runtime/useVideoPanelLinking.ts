@@ -81,17 +81,17 @@ export function useVideoPanelLinking({
     })
   }, [baseLinkedPanels])
 
-  const handleToggleLink = useCallback(async (panelKey: string, storyboardId: string, panelIndex: number) => {
+  const handleSetLink = useCallback(async (panelKey: string, storyboardId: string, panelIndex: number, linked: boolean) => {
     const currentLinked = linkedPanels.get(panelKey) || false
-    const newLinked = !currentLinked
+    if (currentLinked === linked) return
 
-    applyOverride(panelKey, newLinked)
+    applyOverride(panelKey, linked)
 
     try {
       await updatePanelLinkMutation.mutateAsync({
         storyboardId,
         panelIndex,
-        linked: newLinked,
+        linked,
       })
     } catch (error) {
       _ulogError('Failed to save link state:', error)
@@ -99,8 +99,14 @@ export function useVideoPanelLinking({
     }
   }, [applyOverride, linkedPanels, updatePanelLinkMutation])
 
+  const handleToggleLink = useCallback(async (panelKey: string, storyboardId: string, panelIndex: number) => {
+    const currentLinked = linkedPanels.get(panelKey) || false
+    await handleSetLink(panelKey, storyboardId, panelIndex, !currentLinked)
+  }, [handleSetLink, linkedPanels])
+
   return {
     linkedPanels,
     handleToggleLink,
+    handleSetLink,
   }
 }

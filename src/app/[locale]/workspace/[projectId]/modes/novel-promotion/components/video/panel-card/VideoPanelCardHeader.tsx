@@ -17,6 +17,7 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
     panelKey,
     layout,
     media,
+    selection,
     taskStatus,
     videoModel,
     player,
@@ -78,6 +79,25 @@ export default function VideoPanelCardHeader({ runtime }: VideoPanelCardHeaderPr
       <div className="absolute top-2 left-2 bg-[var(--glass-overlay)] text-white px-2 py-0.5 rounded text-xs font-medium">
         {panelIndex + 1}
       </div>
+
+      {selection.onToggleSelected && (
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            selection.onToggleSelected?.(panelKey)
+          }}
+          className={`absolute top-2 left-10 z-20 h-6 w-6 rounded border flex items-center justify-center transition-colors ${
+            selection.isSelected
+              ? 'bg-[var(--glass-accent-from)] border-[var(--glass-accent-from)] text-white'
+              : 'bg-[var(--glass-overlay)] border-white/40 text-white hover:bg-[var(--glass-overlay-strong)]'
+          }`}
+          title={selection.isSelected ? t('toolbar.deselectShot') : t('toolbar.selectShot')}
+          aria-pressed={selection.isSelected}
+        >
+          {selection.isSelected && <AppIcon name="check" className="w-3.5 h-3.5" />}
+        </button>
+      )}
 
       {/* 两卡片中间唯一的链接/断开按钮 */}
 

@@ -8,7 +8,7 @@ const DEFAULT_SIZE_BY_RATIO: Record<string, string> = {
   '1:1': '720x720',
 }
 const DEFAULT_MODEL_BY_MODE: Record<string, string> = {
-  normal: 'veo_3_1-fast',
+  normal: 'veo_3_1',
   firstlastframe: 'veo_3_1-fast-fl',
 }
 

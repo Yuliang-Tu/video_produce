@@ -19,6 +19,7 @@ interface VideoRenderPanelProps {
   panelVoiceLines: Map<string, MatchedVoiceLine[]>
   panelVideoPreference: Map<string, boolean>
   savingPrompts: Set<string>
+  selectedPanelKeys: Set<string>
   flModel: string
   flModelOptions: VideoModelOption[]
   flGenerationOptions: VideoGenerationOptions
@@ -41,6 +42,7 @@ interface VideoRenderPanelProps {
   ) => Promise<void>
   onUpdatePanelVideoModel: (storyboardId: string, panelIndex: number, model: string) => Promise<void>
   onLipSync: (storyboardId: string, panelIndex: number, voiceLineId: string, panelId?: string) => Promise<void>
+  onTogglePanelSelected: (panelKey: string) => void
   onToggleLink: (panelKey: string, storyboardId: string, panelIndex: number) => Promise<void>
   onFlModelChange: (model: string) => void
   onFlCapabilityChange: (field: string, rawValue: string) => void
@@ -86,6 +88,7 @@ export default function VideoRenderPanel({
   panelVoiceLines,
   panelVideoPreference,
   savingPrompts,
+  selectedPanelKeys,
   flModel,
   flModelOptions,
   flGenerationOptions,
@@ -95,6 +98,7 @@ export default function VideoRenderPanel({
   onGenerateVideo,
   onUpdatePanelVideoModel,
   onLipSync,
+  onTogglePanelSelected,
   onToggleLink,
   onFlModelChange,
   onFlCapabilityChange,
@@ -157,6 +161,8 @@ export default function VideoRenderPanel({
                 episodeId={episodeId}
                 runningVoiceLineIds={runningVoiceLineIds}
                 matchedVoiceLines={panelVoiceLines.get(panelKey) || []}
+                isSelected={selectedPanelKeys.has(panelKey)}
+                onToggleSelected={onTogglePanelSelected}
                 onLipSync={onLipSync}
                 showLipSyncVideo={panelVideoPreference.get(panelKey) ?? true}
                 onToggleLipSyncVideo={onToggleLipSyncVideo}

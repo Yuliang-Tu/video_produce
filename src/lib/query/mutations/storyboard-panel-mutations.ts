@@ -1,6 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { queryKeys } from '../keys'
-import { resolveTaskResponse } from '@/lib/task/client'
 import { resolveTaskErrorMessage } from '@/lib/task/error-message'
 import { apiFetch } from '@/lib/api-fetch'
 import {
@@ -205,7 +204,7 @@ export function useRegenerateProjectStoryboardText(projectId: string) {
                 },
                 'regenerate storyboard text failed',
             )
-            return resolveTaskResponse(response)
+            return response.json()
         },
     })
 }

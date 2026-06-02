@@ -32,6 +32,7 @@ import { handleAnalyzeNovelTask } from './handlers/analyze-novel'
 import { handleScreenplayConvertTask } from './handlers/screenplay-convert'
 import { handleEpisodeSplitTask } from './handlers/episode-split'
 import { handleAnalyzeGlobalTask } from './handlers/analyze-global'
+import { resolveAnalysisModel } from './handlers/resolve-analysis-model'
 import { handleAssetHubAIModifyTask } from './handlers/asset-hub-ai-modify'
 import { handleReferenceToCharacterTask } from './handlers/reference-to-character'
 import { handleShotAITask } from './handlers/shot-ai-tasks'
@@ -328,7 +329,7 @@ async function runStoryboardPhasesForClip(params: {
   return finalPanels
 }
 
-async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
+export async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
   const payload = (job.data.payload || {}) as AnyObj
   const projectId = job.data.projectId
   const storyboardId = typeof payload.storyboardId === 'string' ? payload.storyboardId : job.data.targetId
@@ -354,10 +355,14 @@ async function handleRegenerateStoryboardTextTask(job: Job<TaskJobData>) {
     },
   })
   if (!novelPromotionData) throw new Error('Novel promotion data not found')
-  if (!novelPromotionData.analysisModel) throw new Error('Analysis model not configured')
+  const analysisModel = await resolveAnalysisModel({
+    userId,
+    inputModel: payload.analysisModel,
+    projectAnalysisModel: novelPromotionData.analysisModel,
+  })
   const normalizedNovelPromotionData = {
     ...novelPromotionData,
-    analysisModel: novelPromotionData.analysisModel,
+    analysisModel,
     locations: novelPromotionData.locations.filter((item) => readAssetKind(item as unknown as Record<string, unknown>) !== 'prop'),
     props: novelPromotionData.locations
       .filter((item) => readAssetKind(item as unknown as Record<string, unknown>) === 'prop')
